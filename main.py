@@ -1,10 +1,8 @@
+import re
 import requests
 import time
-from urllib.parse import parse_qs
-
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.backends import default_backend
+import subprocess
+import pathlib
 
 CLIENT_ID = "036e43bbe946fe74f13f"
 DEVICE_CODE_URL = "https://github.com/login/device/code"
@@ -22,25 +20,12 @@ class GithubSSHKeyCreationFailed(Exception):
         print(f"{self.message}: {self.http_status_code} ({self.http_text})")
 
 
-def generate_ssh_key(key_name="id_rsa"):
-    key = rsa.generate_private_key(
-        backend=default_backend(), public_exponent=65537, key_size=2048
-    )
-    private_key = key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.OpenSSH,
-        encryption_algorithm=serialization.NoEncryption(),
-    )
-    public_key = key.public_key().public_bytes(
-        encoding=serialization.Encoding.OpenSSH,
-        format=serialization.PublicFormat.OpenSSH,
-    )
-    with open(f"{key_name}", "wb") as private_file:
-        private_file.write(private_key)
-    with open(f"{key_name}.pub", "wb") as public_file:
-        public_file.write(public_key)
-    return public_key.decode("utf-8")
-
+def generate_ssh_key(key_filename="id_rsa") -> str:
+    assert re.match(r"^[a-zA-Z_-]+$", key_filename)
+    key_path = pathlib.Path.home() / ".ssh" / key_filename
+    subprocess.check_call(f"ssh-keygen -q -t rsa -b 4096 -N '' -f {key_path}", shell=True)
+    with key_path.with_suffix(".pub").open() as public_file:
+        return public_file.read()
 
 def initiate_device_flow():
     res = requests.post(
@@ -92,8 +77,8 @@ def try_get_access_token(device_code: str) -> str | None:
     return response_dict["access_token"]
 
 
-def add_new_ssh_key(access_token: str, key_title: str) -> None:
-    public_key = generate_ssh_key()
+def add_new_ssh_key(access_token: str, key_title: str, key_filename: str) -> None:
+    public_key = generate_ssh_key(key_filename)
     key_response = requests.post(
         url="https://api.github.com/user/keys",
         headers={
@@ -109,7 +94,7 @@ def add_new_ssh_key(access_token: str, key_title: str) -> None:
     print("SSH key added successfully.")
 
 
-def create_new_github_ssh_key(key_title: str):
+def create_new_github_ssh_key(key_title: str, key_filename: str):
     device_code, polling_interval = initiate_device_flow()
     print("Waiting for the authorization request to complete...")
     while True:
@@ -117,12 +102,12 @@ def create_new_github_ssh_key(key_title: str):
         access_token = try_get_access_token(device_code)
         if access_token is None:
             continue
-        add_new_ssh_key(access_token, key_title)
+        add_new_ssh_key(access_token, key_title, key_filename)
         break
 
 
 if __name__ == "__main__":
     try:
-        create_new_github_ssh_key("New SSH Key")
+        create_new_github_ssh_key("New SSH Key", "github_test_key")
     except GithubSSHKeyCreationFailed as exc:
         exc.print()
