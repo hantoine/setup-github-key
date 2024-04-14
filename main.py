@@ -24,7 +24,16 @@ class GithubSSHKeyCreationFailed(Exception):
 def generate_ssh_key(key_filename="id_rsa") -> str:
     assert re.match(r"^[a-zA-Z_-]+$", key_filename)
     key_path = pathlib.Path.home() / ".ssh" / key_filename
-    subprocess.check_call(f"ssh-keygen -q -t rsa -b 4096 -N '' -f {key_path}")
+    subprocess.check_call(
+        [
+            "/usr/bin/ssh-keygen",
+            "-q",
+            *("-t", "rsa"),
+            *("-b", "4096"),
+            *("-N", "''"),
+            *("-f", key_path),
+        ]
+    )
     with key_path.with_suffix(".pub").open() as public_file:
         return public_file.read()
 
