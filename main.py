@@ -92,14 +92,14 @@ def try_get_access_token(device_code: str) -> str | None:
     return response_dict["access_token"]
 
 
-def add_ssh_key(public_key: str, access_token: str) -> None:
+def add_ssh_key(public_key: str, access_token: str, key_title: str) -> None:
     key_response = requests.post(
         url="https://api.github.com/user/keys",
         headers={
             "Authorization": f"token {access_token}",
             "Accept": "application/vnd.github.v3+json",
         },
-        json={"title": "New SSH Key via Device Flow", "key": public_key},
+        json={"title": key_title, "key": public_key},
     )
     if key_response.status_code != 201:
         raise GithubSSHKeyCreationFailed(
@@ -108,7 +108,7 @@ def add_ssh_key(public_key: str, access_token: str) -> None:
     print("SSH key added successfully.")
 
 
-def create_new_github_ssh_key():
+def create_new_github_ssh_key(key_title: str):
     device_code, polling_interval = initiate_device_flow()
     print("Waiting for the authorization request to complete...")
     while True:
@@ -117,12 +117,12 @@ def create_new_github_ssh_key():
         if access_token is None:
             continue
         public_key = generate_ssh_key()
-        add_ssh_key(public_key, access_token)
+        add_ssh_key(public_key, access_token, key_title)
         break
 
 
 if __name__ == "__main__":
     try:
-        create_new_github_ssh_key()
+        create_new_github_ssh_key("New SSH Key")
     except GithubSSHKeyCreationFailed as exc:
         exc.print()
