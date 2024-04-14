@@ -1,6 +1,8 @@
 #!/usr/bin/python3
 import re
+import shutil
 import socket
+import tempfile
 import requests
 import time
 import subprocess
@@ -108,12 +110,20 @@ def add_new_ssh_key(access_token: str, key_title: str, key_filename: str) -> Non
 
 def configure_ssh_key(key_filename: str):
     ssh_config_path = pathlib.Path.home() / ".ssh/config"
-    with ssh_config_path.open("a") as ssh_config_file:
-        ssh_config_file.write(
-            "Host github.com\n"
-            f"  IdentityFile ~/.ssh/{key_filename}\n"
-            "  IdentitiesOnly yes\n"
-        )
+    with tempfile.NamedTemporaryFile(mode='w', delete=False) as temp_file:
+        temp_file_path = temp_file.name
+        inside_github_host = False
+        with ssh_config_path.open("r") as file:
+            for line in file:
+                if "Host github.com" in line:
+                    inside_github_host = True
+                elif "Host" in line:
+                    inside_github_host = False
+                elif "IdentityFile" in line and inside_github_host:
+                    indent = line[:line.index("IdentityFile")]
+                    line = indent + f"IdentityFile ~/.ssh/{key_filename}\n"
+                temp_file.write(line)
+    shutil.move(temp_file_path, ssh_config_path)
 
 
 def create_new_github_ssh_key(key_title: str, key_filename: str):
