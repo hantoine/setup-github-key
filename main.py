@@ -1,12 +1,13 @@
 #!/usr/bin/python3
+import pathlib
 import re
 import shutil
 import socket
-import tempfile
-import requests
-import time
 import subprocess
-import pathlib
+import tempfile
+import time
+
+import requests
 
 CLIENT_ID = "036e43bbe946fe74f13f"
 DEVICE_CODE_URL = "https://github.com/login/device/code"
@@ -110,7 +111,7 @@ def add_new_ssh_key(access_token: str, key_title: str, key_filename: str) -> Non
 
 def configure_ssh_key(key_filename: str):
     ssh_config_path = pathlib.Path.home() / ".ssh/config"
-    with tempfile.NamedTemporaryFile(mode='w', delete=False) as temp_file:
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp_file:
         temp_file_path = temp_file.name
         inside_github_host = False
         with ssh_config_path.open("r") as file:
@@ -120,7 +121,7 @@ def configure_ssh_key(key_filename: str):
                 elif "Host" in line:
                     inside_github_host = False
                 elif "IdentityFile" in line and inside_github_host:
-                    indent = line[:line.index("IdentityFile")]
+                    indent = line[: line.index("IdentityFile")]
                     line = indent + f"IdentityFile ~/.ssh/{key_filename}\n"
                 temp_file.write(line)
     shutil.move(temp_file_path, ssh_config_path)
