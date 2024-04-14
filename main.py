@@ -92,7 +92,8 @@ def try_get_access_token(device_code: str) -> str | None:
     return response_dict["access_token"]
 
 
-def add_ssh_key(public_key: str, access_token: str, key_title: str) -> None:
+def add_new_ssh_key(access_token: str, key_title: str) -> None:
+    public_key = generate_ssh_key()
     key_response = requests.post(
         url="https://api.github.com/user/keys",
         headers={
@@ -116,8 +117,7 @@ def create_new_github_ssh_key(key_title: str):
         access_token = try_get_access_token(device_code)
         if access_token is None:
             continue
-        public_key = generate_ssh_key()
-        add_ssh_key(public_key, access_token, key_title)
+        add_new_ssh_key(access_token, key_title)
         break
 
 
