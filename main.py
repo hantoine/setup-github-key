@@ -104,6 +104,15 @@ def add_new_ssh_key(access_token: str, key_title: str, key_filename: str) -> Non
         )
     print("SSH key added successfully.")
 
+def configure_ssh_key(key_filename: str):
+    ssh_config_path = pathlib.Path.home() / ".ssh/config"
+    with ssh_config_path.open("a") as ssh_config_file:
+        ssh_config_file.write(
+            "Host github.com\n"
+            f"  IdentityFile ~/.ssh/{key_filename}\n"
+            "  IdentitiesOnly yes\n"
+        )
+
 
 def create_new_github_ssh_key(key_title: str, key_filename: str):
     device_code, polling_interval = initiate_device_flow()
@@ -114,6 +123,7 @@ def create_new_github_ssh_key(key_title: str, key_filename: str):
         if access_token is not None:
             break
     add_new_ssh_key(access_token, key_title, key_filename)
+    configure_ssh_key(key_filename)
 
 
 def get_ssh_key_title_from_hostname():
