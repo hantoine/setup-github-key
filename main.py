@@ -42,10 +42,6 @@ def generate_ssh_key(key_name="id_rsa"):
     return public_key.decode("utf-8")
 
 
-def parse_urlencoded_response(text: str):
-    return {k: v[0] for k, v in parse_qs(text).items()}
-
-
 def initiate_device_flow():
     res = requests.post(
         DEVICE_CODE_URL,
@@ -71,6 +67,7 @@ def initiate_device_flow():
 def try_get_access_token(device_code: str) -> str | None:
     res = requests.post(
         TOKEN_URL,
+        headers={"Accept": "application/vnd.github.v3+json"},
         data={
             "client_id": CLIENT_ID,
             "device_code": device_code,
@@ -82,13 +79,16 @@ def try_get_access_token(device_code: str) -> str | None:
             "Failed to retrieve access token", res.status_code, res.text
         )
 
-    response_dict = parse_urlencoded_response(res.text)
+    response_dict = res.json()
     if "error" in response_dict:
         if response_dict["error"] != "authorization_pending":
-            raise GithubSSHKeyCreationFailed("Failed to get access token", res.status_code, res.text)
+            raise GithubSSHKeyCreationFailed(
+                "Failed to get access token", res.status_code, res.text
+            )
         else:
             return None
 
+    print("Authorization request completed")
     return response_dict["access_token"]
 
 
