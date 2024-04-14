@@ -1,71 +1,126 @@
-from flask import Flask, request
 import requests
+import time
+from urllib.parse import parse_qs
+
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.backends import default_backend
 
-app = Flask(__name__)
+CLIENT_ID = "036e43bbe946fe74f13f"
+DEVICE_CODE_URL = "https://github.com/login/device/code"
+TOKEN_URL = "https://github.com/login/oauth/access_token"
+SCOPE = "write:public_key"
 
-CLIENT_ID = "your_github_client_id"
-CLIENT_SECRET = "your_github_client_secret"
-REDIRECT_URI = "http://localhost:5000/callback"
+
+class GithubSSHKeyCreationFailed(Exception):
+    def __init__(self, message: str, http_status_code: int, http_text: str):
+        self.message = message
+        self.http_status_code = http_status_code
+        self.http_text = http_text
+
+    def print(self):
+        print(f"{self.message}: {self.http_status_code} ({self.http_text})")
+
 
 def generate_ssh_key(key_name="id_rsa"):
     key = rsa.generate_private_key(
-        backend=default_backend(),
-        public_exponent=65537,
-        key_size=2048
+        backend=default_backend(), public_exponent=65537, key_size=2048
     )
     private_key = key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption()
+        encoding=serialization.Encoding.OpenSSH,
+        format=serialization.PrivateFormat.OpenSSH,
+        encryption_algorithm=serialization.NoEncryption(),
     )
     public_key = key.public_key().public_bytes(
         encoding=serialization.Encoding.OpenSSH,
-        format=serialization.PublicFormat.OpenSSH
+        format=serialization.PublicFormat.OpenSSH,
     )
     with open(f"{key_name}", "wb") as private_file:
         private_file.write(private_key)
     with open(f"{key_name}.pub", "wb") as public_file:
         public_file.write(public_key)
-    return public_key.decode('utf-8')
+    return public_key.decode("utf-8")
 
-@app.route('/')
-def home():
-    return '<a href="https://github.com/login/oauth/authorize?client_id={}&scope=write:public_key">Authorize with GitHub</a>'.format(CLIENT_ID)
 
-@app.route('/callback')
-def callback():
-    code = request.args.get('code')
-    if code:
-        data = {
-            'client_id': CLIENT_ID,
-            'client_secret': CLIENT_SECRET,
-            'code': code,
-            'redirect_uri': REDIRECT_URI
-        }
-        headers = {'Accept': 'application/json'}
-        r = requests.post('https://github.com/login/oauth/access_token', data=data, headers=headers)
-        access_token = r.json().get('access_token')
-        if access_token:
-            public_key = generate_ssh_key()
-            url = "https://api.github.com/user/keys"
-            headers = {
-                "Authorization": f"token {access_token}",
-                "Accept": "application/vnd.github.v3+json"
-            }
-            payload = {
-                "title": "New SSH Key",
-                "key": public_key
-            }
-            response = requests.post(url, headers=headers, json=payload)
-            if response.status_code == 201:
-                return "SSH key added successfully."
-            else:
-                return "Failed to add SSH key. Response: {}".format(response.text)
-        return "Failed to get access token."
-    return "No code provided."
+def parse_urlencoded_response(text: str):
+    return {k: v[0] for k, v in parse_qs(text).items()}
+
+
+def initiate_device_flow():
+    res = requests.post(
+        DEVICE_CODE_URL,
+        headers={"Accept": "application/vnd.github.v3+json"},
+        data={"client_id": CLIENT_ID, "scope": SCOPE},
+    )
+    if res.status_code != 200:
+        raise GithubSSHKeyCreationFailed(
+            "Failed to start device authorization", res.status_code, res.text
+        )
+
+    res_dict = res.json()
+    device_code = res_dict["device_code"]
+    user_code = res_dict["user_code"]
+    verification_uri = res_dict["verification_uri"]
+    polling_interval = res_dict["interval"]
+
+    print(f"Please go to {verification_uri} and enter the code {user_code}.")
+
+    return device_code, polling_interval
+
+
+def try_get_access_token(device_code: str) -> str | None:
+    res = requests.post(
+        TOKEN_URL,
+        data={
+            "client_id": CLIENT_ID,
+            "device_code": device_code,
+            "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+        },
+    )
+    if res.status_code != 200:
+        raise GithubSSHKeyCreationFailed(
+            "Failed to retrieve access token", res.status_code, res.text
+        )
+
+    response_dict = parse_urlencoded_response(res.text)
+    if "error" in response_dict:
+        print(response_dict["error_description"])
+        return
+
+    return response_dict["access_token"]
+
+
+def add_ssh_key(public_key: str, access_token: str) -> None:
+    key_response = requests.post(
+        url="https://api.github.com/user/keys",
+        headers={
+            "Authorization": f"token {access_token}",
+            "Accept": "application/vnd.github.v3+json",
+        },
+        json={"title": "New SSH Key via Device Flow", "key": public_key},
+    )
+    if key_response.status_code != 201:
+        raise GithubSSHKeyCreationFailed(
+            "Failed to add SSH key", key_response.status_code, key_response.text
+        )
+    print("SSH key added successfully.")
+
+
+def create_new_github_ssh_key():
+    device_code, polling_interval = initiate_device_flow()
+
+    while True:
+        time.sleep(polling_interval)
+        access_token = try_get_access_token(device_code)
+        if access_token is None:
+            continue
+        public_key = generate_ssh_key()
+        add_ssh_key(public_key, access_token)
+        break
+
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    try:
+        create_new_github_ssh_key()
+    except GithubSSHKeyCreationFailed as exc:
+        exc.print()
