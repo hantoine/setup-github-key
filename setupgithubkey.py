@@ -15,6 +15,10 @@ TOKEN_URL = "https://github.com/login/oauth/access_token"
 SCOPE = "write:public_key"
 
 
+session = requests.Session()
+session.headers["Accept"] = "application/vnd.github.v3+json"
+
+
 class GithubSSHKeyCreationFailed(Exception):
     def __init__(self, message: str, http_status_code: int, http_text: str):
         self.message = message
@@ -43,11 +47,7 @@ def generate_ssh_key(key_filename="id_rsa") -> str:
 
 
 def initiate_device_flow():
-    res = requests.post(
-        DEVICE_CODE_URL,
-        headers={"Accept": "application/vnd.github.v3+json"},
-        data={"client_id": CLIENT_ID, "scope": SCOPE},
-    )
+    res = session.post(DEVICE_CODE_URL, data={"client_id": CLIENT_ID, "scope": SCOPE})
     if res.status_code != 200:
         raise GithubSSHKeyCreationFailed(
             "Failed to start device authorization", res.status_code, res.text
@@ -65,9 +65,8 @@ def initiate_device_flow():
 
 
 def try_get_access_token(device_code: str) -> str | None:
-    res = requests.post(
-        TOKEN_URL,
-        headers={"Accept": "application/vnd.github.v3+json"},
+    res = session.post(
+        url=TOKEN_URL,
         data={
             "client_id": CLIENT_ID,
             "device_code": device_code,
@@ -94,12 +93,9 @@ def try_get_access_token(device_code: str) -> str | None:
 
 def add_new_ssh_key(access_token: str, key_title: str, key_filename: str) -> None:
     public_key = generate_ssh_key(key_filename)
-    key_response = requests.post(
+    key_response = session.post(
         url="https://api.github.com/user/keys",
-        headers={
-            "Authorization": f"token {access_token}",
-            "Accept": "application/vnd.github.v3+json",
-        },
+        headers={"Authorization": f"token {access_token}"},
         json={"title": key_title, "key": public_key},
     )
     if key_response.status_code != 201:
