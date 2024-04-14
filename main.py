@@ -118,3 +118,10 @@ if __name__ == "__main__":
         create_new_github_ssh_key(ssh_key_title, "github_key")
     except GithubSSHKeyCreationFailed as exc:
         exc.print()
+    else:
+        # Authorizing an SSH key cannot be done though the API at the moment, see:
+        #   https://stackoverflow.com/q/60104002
+        print(
+            'Go to https://github.com/settings/ssh, click on "Configure SSO" for the '
+            f'SSH key named "{ssh_key_title}", and authorize it'
+        )
