@@ -105,6 +105,11 @@ def add_new_ssh_key(access_token: str, key_title: str, key_filename: str) -> Non
     print("SSH key added successfully.")
 
 
+HOST_GITHUB_RE = re.compile(r"^\s*Host\s+github.com", flags=re.IGNORECASE)
+HOST_RE = re.compile(r"^\s*Host\s", flags=re.IGNORECASE)
+IDENTITY_FILE_RE = re.compile(r"^\s*IdentityFile\s", flags=re.IGNORECASE)
+
+
 def configure_ssh_key(key_filename: str):
     ssh_config_path = pathlib.Path.home() / ".ssh/config"
     with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp_file:
@@ -112,12 +117,12 @@ def configure_ssh_key(key_filename: str):
         inside_github_host = False
         with ssh_config_path.open("r") as file:
             for line in file:
-                if "Host github.com" in line:
+                if HOST_GITHUB_RE.match(line):
                     inside_github_host = True
-                elif "Host" in line:
+                elif HOST_RE.match(line):
                     inside_github_host = False
-                elif "IdentityFile" in line and inside_github_host:
-                    indent = line[: line.index("IdentityFile")]
+                elif inside_github_host and IDENTITY_FILE_RE.match(line):
+                    indent = line[: line.lower().index("identityfile")]
                     line = indent + f"IdentityFile ~/.ssh/{key_filename}\n"
                 temp_file.write(line)
     shutil.move(temp_file_path, ssh_config_path)
@@ -141,8 +146,8 @@ def get_ssh_key_title_from_hostname():
 
 
 if __name__ == "__main__":
+    ssh_key_title = get_ssh_key_title_from_hostname()
     try:
-        ssh_key_title = get_ssh_key_title_from_hostname()
         create_new_github_ssh_key(ssh_key_title, "github_key")
     except GithubSSHKeyCreationFailed as exc:
         exc.print()
