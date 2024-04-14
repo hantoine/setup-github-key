@@ -30,7 +30,7 @@ def generate_ssh_key(key_filename="id_rsa") -> str:
             "-q",
             *("-t", "rsa"),
             *("-b", "4096"),
-            *("-N", "''"),
+            *("-N", ""),
             *("-f", key_path),
         ]
     )
