@@ -27,7 +27,7 @@ def generate_ssh_key(key_name="id_rsa"):
         backend=default_backend(), public_exponent=65537, key_size=2048
     )
     private_key = key.private_bytes(
-        encoding=serialization.Encoding.OpenSSH,
+        encoding=serialization.Encoding.PEM,
         format=serialization.PrivateFormat.OpenSSH,
         encryption_algorithm=serialization.NoEncryption(),
     )
@@ -84,8 +84,10 @@ def try_get_access_token(device_code: str) -> str | None:
 
     response_dict = parse_urlencoded_response(res.text)
     if "error" in response_dict:
-        print(response_dict["error_description"])
-        return
+        if response_dict["error"] != "authorization_pending":
+            raise GithubSSHKeyCreationFailed("Failed to get access token", res.status_code, res.text)
+        else:
+            return None
 
     return response_dict["access_token"]
 
@@ -108,7 +110,7 @@ def add_ssh_key(public_key: str, access_token: str) -> None:
 
 def create_new_github_ssh_key():
     device_code, polling_interval = initiate_device_flow()
-
+    print("Waiting for the authorization request to complete...")
     while True:
         time.sleep(polling_interval)
         access_token = try_get_access_token(device_code)
