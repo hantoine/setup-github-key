@@ -6,6 +6,7 @@ import socket
 import subprocess
 import tempfile
 import time
+from typing import cast
 
 import requests
 
@@ -25,11 +26,11 @@ class GithubSSHKeyCreationFailed(Exception):
         self.http_status_code = http_status_code
         self.http_text = http_text
 
-    def print(self):
+    def print(self) -> None:
         print(f"{self.message}: {self.http_status_code} ({self.http_text})")
 
 
-def generate_ssh_key(key_filename="id_rsa") -> str:
+def generate_ssh_key(key_filename: str = "id_rsa") -> str:
     assert re.match(r"^[a-zA-Z_-]+$", key_filename)
     key_path = pathlib.Path.home() / ".ssh" / key_filename
     subprocess.check_call(
@@ -46,7 +47,7 @@ def generate_ssh_key(key_filename="id_rsa") -> str:
         return public_file.read()
 
 
-def initiate_device_flow():
+def initiate_device_flow() -> tuple[str, int]:
     res = session.post(DEVICE_CODE_URL, data={"client_id": CLIENT_ID, "scope": SCOPE})
     if res.status_code != 200:
         raise GithubSSHKeyCreationFailed(
@@ -88,7 +89,7 @@ def try_get_access_token(device_code: str) -> str | None:
             return None
 
     print("Authorization request completed")
-    return response_dict["access_token"]
+    return cast(str, response_dict["access_token"])
 
 
 def add_new_ssh_key(access_token: str, key_title: str, key_filename: str) -> None:
@@ -110,7 +111,7 @@ HOST_RE = re.compile(r"^\s*Host\s", flags=re.IGNORECASE)
 IDENTITY_FILE_RE = re.compile(r"^\s*IdentityFile\s", flags=re.IGNORECASE)
 
 
-def configure_ssh_key(key_filename: str):
+def configure_ssh_key(key_filename: str) -> None:
     ssh_config_path = pathlib.Path.home() / ".ssh/config"
     with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp_file:
         temp_file_path = temp_file.name
@@ -128,7 +129,7 @@ def configure_ssh_key(key_filename: str):
     shutil.move(temp_file_path, ssh_config_path)
 
 
-def create_new_github_ssh_key(key_title: str, key_filename: str):
+def create_new_github_ssh_key(key_title: str, key_filename: str) -> None:
     device_code, polling_interval = initiate_device_flow()
     print("Waiting for the authorization request to complete...")
     while True:
@@ -140,7 +141,7 @@ def create_new_github_ssh_key(key_title: str, key_filename: str):
     configure_ssh_key(key_filename)
 
 
-def get_ssh_key_title_from_hostname():
+def get_ssh_key_title_from_hostname() -> str:
     hostname = socket.gethostname().split(".")[0]
     return "SSH Key " + hostname.replace("-", " ")
 
