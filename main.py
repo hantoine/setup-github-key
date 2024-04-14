@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 import re
 import socket
 import requests
@@ -103,6 +104,7 @@ def add_new_ssh_key(access_token: str, key_title: str, key_filename: str) -> Non
             "Failed to add SSH key", key_response.status_code, key_response.text
         )
     print("SSH key added successfully.")
+
 
 def configure_ssh_key(key_filename: str):
     ssh_config_path = pathlib.Path.home() / ".ssh/config"
