@@ -1,4 +1,5 @@
 import re
+import socket
 import requests
 import time
 import subprocess
@@ -23,9 +24,10 @@ class GithubSSHKeyCreationFailed(Exception):
 def generate_ssh_key(key_filename="id_rsa") -> str:
     assert re.match(r"^[a-zA-Z_-]+$", key_filename)
     key_path = pathlib.Path.home() / ".ssh" / key_filename
-    subprocess.check_call(f"ssh-keygen -q -t rsa -b 4096 -N '' -f {key_path}", shell=True)
+    subprocess.check_call(f"ssh-keygen -q -t rsa -b 4096 -N '' -f {key_path}")
     with key_path.with_suffix(".pub").open() as public_file:
         return public_file.read()
+
 
 def initiate_device_flow():
     res = requests.post(
@@ -100,14 +102,19 @@ def create_new_github_ssh_key(key_title: str, key_filename: str):
     while True:
         time.sleep(polling_interval)
         access_token = try_get_access_token(device_code)
-        if access_token is None:
-            continue
-        add_new_ssh_key(access_token, key_title, key_filename)
-        break
+        if access_token is not None:
+            break
+    add_new_ssh_key(access_token, key_title, key_filename)
+
+
+def get_ssh_key_title_from_hostname():
+    hostname = socket.gethostname().split(".")[0]
+    return "SSH Key " + hostname.replace("-", " ")
 
 
 if __name__ == "__main__":
     try:
-        create_new_github_ssh_key("New SSH Key", "github_test_key")
+        ssh_key_title = get_ssh_key_title_from_hostname()
+        create_new_github_ssh_key(ssh_key_title, "github_key")
     except GithubSSHKeyCreationFailed as exc:
         exc.print()
